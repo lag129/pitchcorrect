@@ -4,8 +4,7 @@ const pc = @import("pitchcorrect");
 
 const usage =
     \\usage:
-    \\  pitchcorrect detect <in.wav> [options]
-    \\  pitchcorrect tune   <in.wav> <out.wav> [options]
+    \\  pitchcorrect tune <in.wav> <out.wav> [options]
     \\
     \\options:
     \\  --key <note>      主音。C, C#, Db, ... B      (default: C)
@@ -34,19 +33,11 @@ pub fn main(init: std.process.Init) !void {
 }
 
 fn run(gpa: std.mem.Allocator, out: *Io.Writer, args: []const []const u8) !void {
-    if (args.len < 3) return error.BadUsage;
+    if (args.len < 4) return error.BadUsage;
+    if (!std.mem.eql(u8, args[1], "tune")) return error.BadUsage;
 
-    const cmd = args[1];
-    if (std.mem.eql(u8, cmd, "detect")) {
-        const opts = try parseOptions(args[3..]);
-        try cmdDetect(gpa, out, try gpa.dupeZ(u8, args[2]), opts);
-    } else if (std.mem.eql(u8, cmd, "tune")) {
-        if (args.len < 4) return error.BadUsage;
-        const opts = try parseOptions(args[4..]);
-        try cmdTune(gpa, out, try gpa.dupeZ(u8, args[2]), try gpa.dupeZ(u8, args[3]), opts);
-    } else {
-        return error.BadUsage;
-    }
+    const opts = try parseOptions(args[4..]);
+    try cmdTune(gpa, out, try gpa.dupeZ(u8, args[2]), try gpa.dupeZ(u8, args[3]), opts);
 }
 
 fn parseRanged(value: []const u8, lo: f32, hi: f32) !f32 {
@@ -77,50 +68,6 @@ fn parseOptions(args: []const []const u8) !pc.engine.Options {
         }
     }
     return opts;
-}
-
-fn cmdDetect(
-    gpa: std.mem.Allocator,
-    out: *Io.Writer,
-    in_path: [:0]const u8,
-    opts: pc.engine.Options,
-) !void {
-    const audio = try pc.wav.load(gpa, in_path);
-    defer audio.deinit(gpa);
-
-    try out.print("# {s}: {d} frames, {d} Hz, {d:.2} sec\n", .{
-        in_path, audio.samples.len, audio.sample_rate, audio.duration(),
-    });
-
-    var det = try pc.yin.Detector.init(gpa, .{ .sample_rate = audio.sample_rate });
-    defer det.deinit(gpa);
-    std.debug.assert(opts.window >= det.minWindow());
-
-    try out.writeAll("# time(s)  freq(Hz)   target   cents  conf\n");
-
-    var retune = pc.engine.Retune.init(opts.tuning, opts.speed_ms, opts.hop, audio.sample_rate);
-
-    var voiced: usize = 0;
-    var total: usize = 0;
-    var pos: usize = 0;
-    while (pos + opts.window <= audio.samples.len) : (pos += opts.hop) {
-        total += 1;
-        const p = det.detect(audio.samples[pos..][0..opts.window]) orelse {
-            retune.noteStart();
-            continue;
-        };
-        voiced += 1;
-
-        const t = @as(f32, @floatFromInt(pos)) / @as(f32, @floatFromInt(audio.sample_rate));
-        const target = p.freq * retune.ratio(p.freq);
-        const cents = 100.0 * pc.scale.freqToSemitones(p.freq, target);
-        try out.print("{d:>8.3} {d:>9.2} {d:>8.2} {d:>7.1} {d:>5.2}\n", .{
-            t, p.freq, target, cents, p.confidence,
-        });
-    }
-
-    const pct = 100.0 * @as(f32, @floatFromInt(voiced)) / @as(f32, @floatFromInt(total));
-    try out.print("# voiced {d}/{d} frames ({d:.1}%)\n", .{ voiced, total, pct });
 }
 
 fn cmdTune(

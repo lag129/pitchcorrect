@@ -8,7 +8,7 @@ pub const max_speed_ms: f32 = 400.0;
 const onset_ms: f32 = 60.0;
 const attack_ms: f32 = 80.0;
 
-pub const Retune = struct {
+const Retune = struct {
     tuning: scale.Tuning,
     alpha_slow: f32,
     onset_frames: usize,
@@ -17,7 +17,7 @@ pub const Retune = struct {
     off_count: usize = 0,
     attack_left: usize,
 
-    pub fn init(tuning: scale.Tuning, speed_ms: f32, hop: usize, sample_rate: u32) Retune {
+    fn init(tuning: scale.Tuning, speed_ms: f32, hop: usize, sample_rate: u32) Retune {
         const ms = std.math.clamp(speed_ms, 0.0, max_speed_ms);
         const hop_ms = 1000.0 * @as(f32, @floatFromInt(hop)) / @as(f32, @floatFromInt(sample_rate));
         const attack = @max(1, @as(usize, @intFromFloat(@round(attack_ms / hop_ms))));
@@ -35,12 +35,12 @@ pub const Retune = struct {
         };
     }
 
-    pub fn noteStart(self: *Retune) void {
+    fn noteStart(self: *Retune) void {
         self.off_count = 0;
         self.attack_left = self.attack_frames;
     }
 
-    pub fn ratio(self: *Retune, freq: f32) f32 {
+    fn ratio(self: *Retune, freq: f32) f32 {
         if (freq <= 0.0) return 1.0;
 
         const current = scale.freqToSemitones(freq, self.tuning.reference_hz);
