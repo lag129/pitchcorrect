@@ -9,7 +9,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    linkMiniaudio(b, mod, target);
 
     const exe = b.addExecutable(.{
         .name = "pitchcorrect",
@@ -37,28 +36,4 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_mod_tests.step);
-}
-
-fn linkMiniaudio(b: *std.Build, mod: *std.Build.Module, target: std.Build.ResolvedTarget) void {
-    const dep = b.dependency("miniaudio", .{});
-    mod.link_libc = true;
-    mod.addIncludePath(dep.path("."));
-    mod.addCSourceFile(.{
-        .file = dep.path("miniaudio.c"),
-        .flags = &.{"-std=c99"},
-    });
-
-    switch (target.result.os.tag) {
-        .macos => {
-            mod.linkFramework("CoreFoundation", .{});
-            mod.linkFramework("CoreAudio", .{});
-            mod.linkFramework("AudioToolbox", .{});
-        },
-        .linux => {
-            mod.linkSystemLibrary("pthread", .{});
-            mod.linkSystemLibrary("m", .{});
-            mod.linkSystemLibrary("dl", .{});
-        },
-        else => {},
-    }
 }

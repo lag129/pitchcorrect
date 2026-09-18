@@ -1,5 +1,6 @@
 const std = @import("std");
 const Io = std.Io;
+
 const pc = @import("pitchcorrect");
 
 const usage =
@@ -26,18 +27,18 @@ pub fn main(init: std.process.Init) !void {
     const out = &stdout_file_writer.interface;
     defer out.flush() catch {};
 
-    run(arena, out, args) catch |err| {
+    run(arena, out, init.io, args) catch |err| {
         if (err == error.BadUsage) try out.writeAll(usage);
         return err;
     };
 }
 
-fn run(gpa: std.mem.Allocator, out: *Io.Writer, args: []const []const u8) !void {
+fn run(gpa: std.mem.Allocator, out: *Io.Writer, io: std.Io, args: []const []const u8) !void {
     if (args.len < 4) return error.BadUsage;
     if (!std.mem.eql(u8, args[1], "tune")) return error.BadUsage;
 
     const opts = try parseOptions(args[4..]);
-    try cmdTune(gpa, out, try gpa.dupeZ(u8, args[2]), try gpa.dupeZ(u8, args[3]), opts);
+    try cmdTune(gpa, out, io, args[2], args[3], opts);
 }
 
 fn parseRanged(value: []const u8, lo: f32, hi: f32) !f32 {
@@ -73,18 +74,21 @@ fn parseOptions(args: []const []const u8) !pc.engine.Options {
 fn cmdTune(
     gpa: std.mem.Allocator,
     out: *Io.Writer,
-    in_path: [:0]const u8,
-    out_path: [:0]const u8,
+    io: std.Io,
+    in_path: []const u8,
+    out_path: []const u8,
     opts: pc.engine.Options,
 ) !void {
-    const audio = try pc.wav.load(gpa, in_path);
-    defer audio.deinit(gpa);
+    var pcm: pc.wave.MonoPcm = undefined;
+    try pc.wave.mono_wave_read(gpa, &pcm, in_path, io);
+    defer gpa.free(pcm.s);
 
     var stats: pc.engine.Stats = .{};
-    const tuned = try pc.engine.tune(gpa, audio.samples, audio.sample_rate, opts, &stats);
+    const tuned = try pc.engine.tune(gpa, pcm.s, @intCast(pcm.fs), opts, &stats);
     defer gpa.free(tuned);
 
-    try pc.wav.save(out_path, tuned, audio.sample_rate);
+    var tuned_pcm: pc.wave.MonoPcm = .{ .fs = pcm.fs, .bits = 16, .s = tuned };
+    try pc.wave.mono_wave_write(&tuned_pcm, out_path, io);
 
     const pct = 100.0 * @as(f32, @floatFromInt(stats.voiced)) / @as(f32, @floatFromInt(stats.frames));
     try out.print("wrote {s} (voiced {d}/{d}, {d:.1}%)\n", .{
