@@ -7,26 +7,26 @@ pub const Frame = struct {
 
 const min_period: f32 = 16.0;
 
-pub fn shift(gpa: std.mem.Allocator, input: []const f32, hop: usize, frames: []const Frame) ![]f32 {
+pub fn shift(allocator: std.mem.Allocator, input: []const f32, hop: usize, frames: []const Frame) ![]f32 {
     const n = input.len;
     const nf: f32 = @floatFromInt(n);
 
-    const out = try gpa.alloc(f32, n);
-    errdefer gpa.free(out);
+    const out = try allocator.alloc(f32, n);
+    errdefer allocator.free(out);
     @memset(out, 0.0);
 
-    const weight = try gpa.alloc(f32, n);
-    defer gpa.free(weight);
+    const weight = try allocator.alloc(f32, n);
+    defer allocator.free(weight);
     @memset(weight, 0.0);
 
     var marks: std.ArrayList(usize) = .empty;
-    defer marks.deinit(gpa);
+    defer marks.deinit(allocator);
 
     var pos: f32 = 0.0;
     while (pos < nf) {
         const f = frameAt(frames, hop, pos);
         const center = snapToPeak(input, @intFromFloat(pos), @intFromFloat(f.period * 0.25));
-        try marks.append(gpa, center);
+        try marks.append(allocator, center);
         pos = @as(f32, @floatFromInt(center)) + f.period;
     }
     if (marks.items.len == 0) {

@@ -20,7 +20,7 @@ pub const Detector = struct {
     tau_max: usize,
     cmnd: []f32,
 
-    pub fn init(gpa: std.mem.Allocator, cfg: Config) !Detector {
+    pub fn init(allocator: std.mem.Allocator, cfg: Config) !Detector {
         const sr: f32 = @floatFromInt(cfg.sample_rate);
         const tau_max: usize = @intFromFloat(@ceil(sr / cfg.min_freq));
         const tau_min = @max(2, @as(usize, @intFromFloat(@floor(sr / cfg.max_freq))));
@@ -29,12 +29,12 @@ pub const Detector = struct {
             .cfg = cfg,
             .tau_min = tau_min,
             .tau_max = tau_max,
-            .cmnd = try gpa.alloc(f32, tau_max + 1),
+            .cmnd = try allocator.alloc(f32, tau_max + 1),
         };
     }
 
-    pub fn deinit(self: Detector, gpa: std.mem.Allocator) void {
-        gpa.free(self.cmnd);
+    pub fn deinit(self: Detector, allocator: std.mem.Allocator) void {
+        allocator.free(self.cmnd);
     }
 
     pub fn minWindow(self: Detector) usize {

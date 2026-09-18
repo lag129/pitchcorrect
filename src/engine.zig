@@ -1,7 +1,8 @@
 const std = @import("std");
-const yin = @import("yin.zig");
+
 const psola = @import("psola.zig");
 const scale = @import("scale.zig");
+const yin = @import("yin.zig");
 
 pub const max_speed_ms: f32 = 400.0;
 
@@ -86,19 +87,19 @@ pub const Stats = struct {
 };
 
 pub fn tune(
-    gpa: std.mem.Allocator,
+    allocator: std.mem.Allocator,
     input: []const f32,
     sample_rate: u32,
     opts: Options,
     stats: ?*Stats,
 ) ![]f32 {
-    var det = try yin.Detector.init(gpa, .{ .sample_rate = sample_rate });
-    defer det.deinit(gpa);
+    var det = try yin.Detector.init(allocator, .{ .sample_rate = sample_rate });
+    defer det.deinit(allocator);
     std.debug.assert(opts.window >= det.minWindow());
 
     const n_frames = if (input.len < opts.window) 0 else (input.len - opts.window) / opts.hop + 1;
-    const frames = try gpa.alloc(psola.Frame, n_frames);
-    defer gpa.free(frames);
+    const frames = try allocator.alloc(psola.Frame, n_frames);
+    defer allocator.free(frames);
 
     var retune = Retune.init(opts.tuning, opts.speed_ms, opts.hop, sample_rate);
     var last_period: f32 = @as(f32, @floatFromInt(sample_rate)) / 200.0;
@@ -123,5 +124,5 @@ pub fn tune(
 
     if (stats) |s| s.* = .{ .frames = n_frames, .voiced = voiced };
 
-    return psola.shift(gpa, input, opts.hop, frames);
+    return psola.shift(allocator, input, opts.hop, frames);
 }
